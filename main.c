@@ -124,11 +124,14 @@ int main(int argc, char **argv)
 	char recvbuf[2048];	
 	recv(newsockfd, recvbuf, sizeof(recvbuf), 0);
 	// printf("收到encode_id：%s \n", recvbuf);
-	//使用私钥解密密文得到csr
+	//使用私钥解密密文得到id
 	char *ca_sk = "ca.key";
 	char *decode_id;
 	decode_id = my_decrypt(recvbuf, ca_sk);
 	printf("收到id：%s \n", decode_id);
+	//验证ID合法性
+
+	//存储client的pk
 	
 	
 	// //csr 写入文件
