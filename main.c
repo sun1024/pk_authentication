@@ -34,7 +34,7 @@ static int generate_set_random_serial(X509 *crt);
 static int generate_signed_key_pair(EVP_PKEY **key, X509_REQ **req, X509 **crt);
 static void initialize_crypto(void);
 static void key_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size);
-static int load_ca(const char *ca_crt_path, X509 **ca_crt);
+static int load_client(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub);
 static void print_bytes(uint8_t *data, size_t size);
 static void write_bytes(const char *path, uint8_t *data, size_t size);
 static char *my_encrypt(char *str,char *path_key);
@@ -43,19 +43,17 @@ static char *my_decrypt(char *str,char *path_key);
 int main(int argc, char **argv)
 {
 	initialize_crypto();
-	
-	// /* Convert req to PEM format. */
-	// // 将private key 和 csr 写入文件
-	// uint8_t *req_bytes = NULL;
-	// size_t req_size = 0;
-	// uint8_t *key_bytes = NULL;
-	// size_t key_size = 0;
-	// req_to_pem(req, &req_bytes, &req_size);
-	// char *csr_path = "app.csr";
-	// write_bytes(csr_path, req_bytes, req_size);
-	// key_to_pem(key, &key_bytes, &key_size);
-	// char *key_path = "app.key";
-	// write_bytes(key_path, key_bytes, key_size);
+
+	/* Load client pk and sk. */
+	char *client_key_path = "app.key";
+	char *client_pub_path = "pubapp.key";
+	initialize_crypto();
+	EVP_PKEY *client_key = NULL;
+	EVP_PKEY *client_pub = NULL;
+	if (!load_client(client_key_path, &client_key, client_pub_path, &client_pub)) {
+		fprintf(stderr, "Failed to load client certificate and/or key!\n");
+		return 1;
+	}	
 
 	//socket 过程
 	int sockfd;	
@@ -99,6 +97,7 @@ int main(int argc, char **argv)
 	char sendbuf[2048];
 	strcpy(sendbuf, encode_id);
 	send(sockfd, sendbuf, strlen(sendbuf), 0);
+	
 	/*//收到签名证书
 	char recv_crt_buf[2048];	
 	recv(sockfd, recv_crt_buf, sizeof(recv_crt_buf), 0);
@@ -296,22 +295,29 @@ void key_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size)
 	BIO_free_all(bio);
 }
 
-int load_ca(const char *ca_crt_path, X509 **ca_crt)
+int load_client(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub)
 {
 	BIO *bio = NULL;
-	*ca_crt = NULL;
+	*ca_key = NULL;
+	*ca_pub = NULL;
 
-	/* Load CA public key. */
+	/* Load CA real public key. */
 	bio = BIO_new(BIO_s_file());
-	if (!BIO_read_filename(bio, ca_crt_path)) goto err;
-	*ca_crt = PEM_read_bio_X509(bio, NULL, NULL, NULL);
-	if (!*ca_crt) goto err;
+	if (!BIO_read_filename(bio, ca_pub_path)) goto err;
+	*ca_pub = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+	if (!*ca_pub) goto err;
 	BIO_free_all(bio);
 
+	/* Load CA private key. */
+	bio = BIO_new(BIO_s_file());
+	if (!BIO_read_filename(bio, ca_key_path)) goto err;
+	*ca_key = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+	if (!ca_key) goto err;
+	BIO_free_all(bio);
 	return 1;
 err:
 	BIO_free_all(bio);
-	X509_free(*ca_crt);
+	EVP_PKEY_free(*ca_key);
 	return 0;
 }
 
