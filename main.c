@@ -36,29 +36,30 @@ static int generate_signed_key_pair(EVP_PKEY *ca_key, X509 *ca_crt, X509_REQ **r
 static void initialize_crypto(void);
 static void key_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size);
 static void pub_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size);
-static int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub, const char *ca_crt_path, X509 **ca_crt);
+static int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub);
 static void print_bytes(uint8_t *data, size_t size);
 static char *my_encrypt(char *str,char *path_key);
 static char *my_decrypt(char *str,char *path_key);
 
 int main(int argc, char **argv)
 {
-	/* Assumes the CA certificate and CA key is given as arguments. */
-	if (argc != 3) {
-		fprintf(stderr, "usage: %s <cakey> <cacert>\n", argv[0]);
-		return 1;
-	}
+	// /* Assumes the CA certificate and CA key is given as arguments. */
+	// if (argc != 3) {
+	// 	fprintf(stderr, "usage: %s <cakey> <cacert>\n", argv[0]);
+	// 	return 1;
+	// }
 
-	char *ca_key_path = argv[1];
-	char *ca_crt_path = argv[2];
-	char *ca_pub_path = "pubca.key";
+	// char *ca_key_path = argv[1];
+	// char *ca_crt_path = argv[2];
+	// char *ca_pub_path = "pubca.key";
 
+	char *ca_key_path = "ncc.key";
+	char *ca_pub_path = "pubncc.key";
 	/* Load CA key and cert. */
 	initialize_crypto();
 	EVP_PKEY *ca_key = NULL;
 	EVP_PKEY *ca_pub = NULL;
-	X509 *ca_crt = NULL;
-	if (!load_ca(ca_key_path, &ca_key, ca_pub_path, &ca_pub, ca_crt_path, &ca_crt)) {
+	if (!load_ca(ca_key_path, &ca_key, ca_pub_path, &ca_pub)) {
 		fprintf(stderr, "Failed to load CA certificate and/or key!\n");
 		return 1;
 	}
@@ -125,7 +126,7 @@ int main(int argc, char **argv)
 	recv(newsockfd, recvbuf, sizeof(recvbuf), 0);
 	// printf("收到encode_id：%s \n", recvbuf);
 	//使用私钥解密密文得到id
-	char *ca_sk = "ca.key";
+	char *ca_sk = "ncc.key";
 	char *decode_id;
 	decode_id = my_decrypt(recvbuf, ca_sk);
 	printf("收到id：%s \n", decode_id);
@@ -336,19 +337,11 @@ void pub_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size)
 	BIO_free_all(bio);
 }
 
-int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub, const char *ca_crt_path, X509 **ca_crt)
+int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub)
 {
 	BIO *bio = NULL;
-	*ca_crt = NULL;
 	*ca_key = NULL;
 	*ca_pub = NULL;
-
-	/* Load CA public key. */
-	bio = BIO_new(BIO_s_file());
-	if (!BIO_read_filename(bio, ca_crt_path)) goto err;
-	*ca_crt = PEM_read_bio_X509(bio, NULL, NULL, NULL);
-	if (!*ca_crt) goto err;
-	BIO_free_all(bio);
 
 	/* Load CA real public key. */
 	bio = BIO_new(BIO_s_file());
@@ -366,7 +359,6 @@ int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path,
 	return 1;
 err:
 	BIO_free_all(bio);
-	X509_free(*ca_crt);
 	EVP_PKEY_free(*ca_key);
 	return 0;
 }
