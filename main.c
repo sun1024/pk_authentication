@@ -94,19 +94,20 @@ int main(int argc, char **argv)
 	char *ca_pubkey = "pubncc.key";
 	char *encode_id;
 	encode_id = my_encrypt(id, ca_pubkey);
+	//test
+	char *ca_sk = "ncc.key";
+	char *decode_id;
+	decode_id = my_decrypt(encode_id, ca_sk);
+	printf("id：%s \n", decode_id);
 	//发送encode_id
-	char sendbuf[2048];
-	strcpy(sendbuf, encode_id);
-	send(sockfd, sendbuf, strlen(sendbuf), 0);
+	send(sockfd, encode_id, strlen(encode_id), 0);
 
 	//发送client_pub
 	uint8_t *client_pub_bytes = NULL;
 	size_t client_pub_size = 0;
 	pub_to_pem(client_pub, &client_pub_bytes, &client_pub_size);
 	// print_bytes(ca_pub_bytes, ca_pub_size);
-	char send_client_pub[2048];
-	strcpy(send_client_pub, client_pub_bytes);
-	send(sockfd, send_client_pub, strlen(send_client_pub), 0);
+	send(sockfd, client_pub_bytes, client_pub_size, 0);
 
 	close(sockfd);
 	exit(EXIT_SUCCESS);
