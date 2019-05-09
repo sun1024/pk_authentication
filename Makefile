@@ -5,9 +5,9 @@ LDFLAGS=-O0 -lcrypto -g -ggdb -Wall -pedantic
 all: ncc
 
 ncc: main.o
-        $(CC) -o $@ $(LDFLAGS) $^
+		$(CC) -o $@ $(LDFLAGS) $^
 
 %.o: %.c
-        $(CC) -c -o $@ $(CFLAGS) $<
+		$(CC) -c -o $@ $(CFLAGS) $<
 
-        openssl genrsa -out ncc.key 4096 && openssl rsa -in ncc.key -pubout -out pubncc.key
+		openssl genrsa -out ncc.key 4096 && openssl rsa -in ncc.key -pubout -out pubncc.key
