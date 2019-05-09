@@ -119,8 +119,8 @@ int main(int argc, char **argv)
 
 	char sendfirstbuf[2048];
 	strcpy(sendfirstbuf, ca_pub_bytes);
-	// send(newsockfd, sendfirstbuf, strlen(sendfirstbuf), 0);
-	send(newsockfd, sendfirstbuf, ca_pub_size, 0);
+	send(newsockfd, sendfirstbuf, strlen(sendfirstbuf), 0);
+	// send(newsockfd, sendfirstbuf, ca_pub_size, 0);
 	//接收证书请求的密文
 	char recvbuf[2048];	
 	recv(newsockfd, recvbuf, sizeof(recvbuf), 0);
@@ -132,9 +132,16 @@ int main(int argc, char **argv)
 	printf("收到id：%s \n", decode_id);
 	//验证ID合法性
 
-	//存储client的pk
-	
-	
+	//if ID合法 => 获取client的pk
+	char recv_client_pub[2048];	
+	recv(newsockfd, recv_client_pub, sizeof(recv_client_pub), 0);		
+	printf("收到client_pub：%s \n", recv_client_pub);
+	//client_pub 写入文件
+	FILE *fp;
+    if((fp=fopen("pubclient.key","w"))==NULL)
+        printf("file cannot open \n");
+	fputs(recv_client_pub, fp);
+	fclose(fp);
 	// //csr 写入文件
 	// FILE *fp;
     // if((fp=fopen("app.csr","w"))==NULL)
