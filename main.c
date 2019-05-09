@@ -117,9 +117,7 @@ int main(int argc, char **argv)
 	pub_to_pem(ca_pub, &ca_pub_bytes, &ca_pub_size);
 	// print_bytes(ca_pub_bytes, ca_pub_size);
 
-	char sendfirstbuf[2048];
-	strcpy(sendfirstbuf, ca_pub_bytes);
-	send(newsockfd, sendfirstbuf, strlen(sendfirstbuf), 0);
+	send(newsockfd, ca_pub_bytes, ca_pub_size, 0);
 	// send(newsockfd, sendfirstbuf, ca_pub_size, 0);
 	//接收证书请求的密文
 	char recvbuf[2048];	
