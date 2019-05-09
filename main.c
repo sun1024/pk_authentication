@@ -34,6 +34,7 @@ static int generate_set_random_serial(X509 *crt);
 static int generate_signed_key_pair(EVP_PKEY **key, X509_REQ **req, X509 **crt);
 static void initialize_crypto(void);
 static void key_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size);
+static void pub_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size);
 static int load_client(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub);
 static void print_bytes(uint8_t *data, size_t size);
 static void write_bytes(const char *path, uint8_t *data, size_t size);
@@ -80,34 +81,32 @@ int main(int argc, char **argv)
 	//接收公钥
 	char recvbuf[2048];	
 	recv(sockfd, recvbuf, sizeof(recvbuf), 0);
-	//ca_pub 写入文件
+	//ncc_pub 写入文件
 	FILE *fp_ca;
-    if((fp_ca=fopen("pubca.key","w"))==NULL)
+    if((fp_ca=fopen("pubncc.key","w"))==NULL)
         printf("file cannot open \n");
 	fputs(recvbuf, fp_ca);
 	fclose(fp_ca);
-	printf("收到CA公钥：%s", recvbuf);
+	printf("收到ncc公钥：%s", recvbuf);
 
 	//对ID进行加密
 	char *id = "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3";
-	char *ca_pubkey = "pubca.key";
+	char *ca_pubkey = "pubncc.key";
 	char *encode_id;
 	encode_id = my_encrypt(id, ca_pubkey);
 	//发送encode_id
 	char sendbuf[2048];
 	strcpy(sendbuf, encode_id);
 	send(sockfd, sendbuf, strlen(sendbuf), 0);
-	
-	/*//收到签名证书
-	char recv_crt_buf[2048];	
-	recv(sockfd, recv_crt_buf, sizeof(recv_crt_buf), 0);
-	//crt 写入文件
-	FILE *fp;
-    if((fp=fopen("app.crt","w"))==NULL)
-        printf("file cannot open \n");
-	fputs(recv_crt_buf, fp);
-	fclose(fp);
-	printf("收到签名：%s", recv_crt_buf);*/
+
+	//发送client_pub
+	uint8_t *client_pub_bytes = NULL;
+	size_t client_pub_size = 0;
+	pub_to_pem(client_pub, &client_pub_bytes, &client_pub_size);
+	// print_bytes(ca_pub_bytes, ca_pub_size);
+	char send_client_pub[2048];
+	strcpy(send_client_pub, client_pub_bytes);
+	send(sockfd, send_client_pub, strlen(send_client_pub), 0);
 
 	close(sockfd);
 	exit(EXIT_SUCCESS);
@@ -289,6 +288,17 @@ void key_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size)
 	/* Convert private key to PEM format. */
 	BIO *bio = BIO_new(BIO_s_mem());
 	PEM_write_bio_PrivateKey(bio, key, NULL, NULL, 0, NULL, NULL);
+	*key_size = BIO_pending(bio);
+	*key_bytes = (uint8_t *)malloc(*key_size + 1);
+	BIO_read(bio, *key_bytes, *key_size);
+	BIO_free_all(bio);
+}
+
+void pub_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size)
+{
+	/* Convert private key to PEM format. */
+	BIO *bio = BIO_new(BIO_s_mem());
+	PEM_write_bio_PUBKEY(bio, key);
 	*key_size = BIO_pending(bio);
 	*key_bytes = (uint8_t *)malloc(*key_size + 1);
 	BIO_read(bio, *key_bytes, *key_size);
