@@ -87,7 +87,8 @@ int main(int argc, char **argv)
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(PORT);
 	//设置ip为本机IP
-	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	// server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	if (bind(sockfd, (struct sockaddr*)(&server_addr), sizeof(struct sockaddr)) < 0)
 	{
 		fprintf(stderr, "bind failed \n");
@@ -375,53 +376,93 @@ void print_bytes(uint8_t *data, size_t size)
 	}
 }
 
-//加密
-char *my_encrypt(char *str,char *path_key){
-    char *p_en;
-    RSA *p_rsa;
-    FILE *file;
-    int flen,rsa_len;
-    if((file=fopen(path_key,"r"))==NULL){
-        perror("open key file error");
-        return NULL;    
-    }   
-    if((p_rsa=PEM_read_RSA_PUBKEY(file,NULL,NULL,NULL))==NULL){
-    //if((p_rsa=PEM_read_RSAPublicKey(file,NULL,NULL,NULL))==NULL){   换成这句死活通不过，无论是否将公钥分离源文件
+ //加密
+ char *my_encrypt(char *str, char *path_key)
+ {
+     char *p_en = NULL;
+     RSA  *p_rsa = NULL;
+     FILE *file = NULL;
+
+     int  lenth = 0;    //flen为源文件长度， rsa_len为秘钥长度
+
+     //1.打开秘钥文件
+     if((file = fopen(path_key, "rb")) == NULL)
+     {
+        perror("fopen() error 111111111 ");
+         goto End;
+     }        
+
+     //2.从公钥中获取 加密的秘钥
+     if((p_rsa = PEM_read_RSA_PUBKEY(file, NULL,NULL,NULL )) == NULL)
+     {
+         ERR_print_errors_fp(stdout);
+         goto End;
+     }
+     lenth = strlen(str);
+
+     p_en = (char *)malloc(256);
+     if(!p_en)
+     {
+         perror("malloc() error 2222222222");
+         goto End;
+     }    
+     memset(p_en, 0, 256);
+
+     //5.对内容进行加密
+     if(RSA_public_encrypt(lenth, (unsigned char*)str, (unsigned char*)p_en, p_rsa, RSA_PKCS1_PADDING) < 0)
+     {
+     perror("RSA_public_encrypt() error 2222222222");
+     goto End;
+     }
+ End:
+
+     //6.释放秘钥空间， 关闭文件
+     if(p_rsa)    RSA_free(p_rsa);
+     if(file)     fclose(file);
+
+     return p_en;
+ } 
+//解密
+ char *my_decrypt(char *str, char *path_key)
+ {
+     char *p_de = NULL;
+     RSA  *p_rsa = NULL;
+     FILE *file = NULL;
+
+    //1.打开秘钥文件
+    file = fopen(path_key, "rb");
+    if(!file)
+    {
+        perror("fopen() error 22222222222");
+        goto End;
+    }        
+
+    //2.从私钥中获取 解密的秘钥
+    if((p_rsa = PEM_read_RSAPrivateKey(file, NULL,NULL,NULL )) == NULL)
+    {
         ERR_print_errors_fp(stdout);
-        return NULL;
-    }   
-    flen=strlen(str);
-    rsa_len=RSA_size(p_rsa);
-    p_en=(unsigned char *)malloc(rsa_len+1);
-    memset(p_en,0,rsa_len+1);
-    if(RSA_public_encrypt(rsa_len,(unsigned char *)str,(unsigned char*)p_en,p_rsa,RSA_NO_PADDING)<0){
-        return NULL;
+        goto End;
     }
-    RSA_free(p_rsa);
-    fclose(file);
-    return p_en;
-}
-// 解密
-char *my_decrypt(char *str,char *path_key){
-    char *p_de;
-    RSA *p_rsa;
-    FILE *file;
-    int rsa_len;
-    if((file=fopen(path_key,"r"))==NULL){
-        perror("open key file error");
-        return NULL;
+
+    p_de = (char *)malloc(245);
+    if(!p_de)
+    {
+        perror("malloc() error ");
+        goto End;
+    }    
+    memset(p_de, 0, 245);
+
+    //5.对内容进行加密
+    if(RSA_private_decrypt(256, (unsigned char*)str, (unsigned char*)p_de, p_rsa, RSA_PKCS1_PADDING) < 0)
+    {
+        perror("RSA_public_encrypt() error ");
+        goto End;
     }
-    if((p_rsa=PEM_read_RSAPrivateKey(file,NULL,NULL,NULL))==NULL){
-        ERR_print_errors_fp(stdout);
-        return NULL;
-    }
-    rsa_len=RSA_size(p_rsa);
-    p_de=(unsigned char *)malloc(rsa_len+1);
-    memset(p_de,0,rsa_len+1);
-    if(RSA_private_decrypt(rsa_len,(unsigned char *)str,(unsigned char*)p_de,p_rsa,RSA_NO_PADDING)<0){
-        return NULL;
-    }
-    RSA_free(p_rsa);
-    fclose(file);
+
+    End:
+    //6.释放秘钥空间， 关闭文件
+     if(p_rsa)    RSA_free(p_rsa);
+    if(file)     fclose(file);
+
     return p_de;
 }
