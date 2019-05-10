@@ -10,4 +10,4 @@ client: main.o
 %.o: %.c
         $(CC) -c -o $@ $(CFLAGS) $<
 
-        openssl genrsa -out app.key 4096 && openssl rsa -in app.key -pubout -out pubapp.key
+        openssl genrsa -out app.key 2048 && openssl rsa -in app.key -pubout -out pubapp.key
