@@ -1,15 +1,15 @@
 #include <stdint.h>
 #include <stdio.h>
+#include<unistd.h>
+#include<stdlib.h>
 #include<sys/types.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
-#include<arpa/inet.h>
-#include<unistd.h>
-#include<stdlib.h>
-#include<string.h>
 #include<netdb.h>
+#include<string.h>
 #include<errno.h>
 
+int count = 1;
 #include <openssl/err.h>
 #include <openssl/conf.h>
 #include <openssl/pem.h>
@@ -24,172 +24,79 @@
 #define REQ_DN_O "Example Company"
 #define REQ_DN_OU ""
 #define REQ_DN_CN "VNF Application"
-#define PORT 2345
-#define MAXSIZE 2048
+#define PORT 2346
 
 static void cleanup_crypto(void);
 static void crt_to_pem(X509 *crt, uint8_t **crt_bytes, size_t *crt_size);
 static void req_to_pem(X509_REQ *req, uint8_t **req_bytes, size_t *req_size); // add 证书请求=>pem
 static int generate_key_csr(EVP_PKEY **key, X509_REQ **req);
 static int generate_set_random_serial(X509 *crt);
-static int generate_signed_key_pair(EVP_PKEY *ca_key, X509 *ca_crt, X509_REQ **req, X509 **crt);
+static int generate_signed_key_pair(EVP_PKEY **key, X509_REQ **req, X509 **crt);
 static void initialize_crypto(void);
 static void key_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size);
 static void pub_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size);
-static int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub);
+static int load_client(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub);
 static void print_bytes(uint8_t *data, size_t size);
+static void write_bytes(const char *path, uint8_t *data, size_t size);
 static char *my_encrypt(char *str,char *path_key);
 static char *my_decrypt(char *str,char *path_key);
 
 int main(int argc, char **argv)
 {
-	// /* Assumes the CA certificate and CA key is given as arguments. */
-	// if (argc != 3) {
-	// 	fprintf(stderr, "usage: %s <cakey> <cacert>\n", argv[0]);
-	// 	return 1;
-	// }
-
-	// char *ca_key_path = argv[1];
-	// char *ca_crt_path = argv[2];
-	// char *ca_pub_path = "pubca.key";
-
-	char *ca_key_path = "ncc.key";
-	char *ca_pub_path = "pubncc.key";
-	/* Load CA key and cert. */
 	initialize_crypto();
-	EVP_PKEY *ca_key = NULL;
-	EVP_PKEY *ca_pub = NULL;
-	if (!load_ca(ca_key_path, &ca_key, ca_pub_path, &ca_pub)) {
-		fprintf(stderr, "Failed to load CA certificate and/or key!\n");
+
+	/* Load client pk and sk. */
+	char *client_key_path = "app.key";
+	char *client_pub_path = "pubapp.key";
+	initialize_crypto();
+	EVP_PKEY *client_key = NULL;
+	EVP_PKEY *client_pub = NULL;
+	if (!load_client(client_key_path, &client_key, client_pub_path, &client_pub)) {
+		fprintf(stderr, "Failed to load client certificate and/or key!\n");
 		return 1;
-	}
+	}	
 
 	//socket 过程
-	int sockfd, newsockfd;
-	//定义服务端套接口数据结构
+	int sockfd;	
+	char buffer[2014];
 	struct sockaddr_in server_addr;
-	struct sockaddr_in client_addr;
-	int sin_zise, portnumber;
-	//发送数据缓冲区
-	char buf[MAXSIZE];
-	//定义客户端套接口数据结构
-	int addr_len = sizeof(struct sockaddr_in);
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+	struct hostent *host;
+	int nbytes;
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
-		fprintf(stderr, "create socket failed\n");
+		fprintf(stderr, "Socket Error is %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
-	//puts("create socket success");
-	//printf("sockfd is %d\n", sockfd);
-	//清空表示地址的结构体变量
-	bzero(&server_addr, sizeof(struct sockaddr_in));
-	//设置addr的成员变量信息
+	bzero(&server_addr, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(PORT);
-	//设置ip为本机IP
 	// server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-	if (bind(sockfd, (struct sockaddr*)(&server_addr), sizeof(struct sockaddr)) < 0)
+	server_addr.sin_addr.s_addr = inet_addr("192.168.242.136");
+	//客户端发出请求
+	if (connect(sockfd, (struct sockaddr *)(&server_addr), sizeof(struct sockaddr)) == -1)
 	{
-		fprintf(stderr, "bind failed \n");
+		fprintf(stderr, "Connect failed\n");
 		exit(EXIT_FAILURE);
 	}
-	//puts("bind success\n");
-	if (listen(sockfd, 10) < 0)
-	{
-		perror("listen fail\n");
-		exit(EXIT_FAILURE);
-	}
-	//puts("listen success\n");
-	int sin_size = sizeof(struct sockaddr_in);
-	//printf("sin_size is %d\n", sin_size);
-	if ((newsockfd = accept(sockfd, (struct sockaddr *)(&client_addr), &sin_size)) < 0)
-	{
-		perror("accept error");
-		exit(EXIT_FAILURE);
-	}
-	
-	//printf("new socket id is %d\n", newsockfd);
-	//printf("Accept clent ip is %s\n", inet_ntoa(client_addr.sin_addr));
-
-	//发送公钥(ca_pub)
-	uint8_t *ca_pub_bytes = NULL;
-	size_t ca_pub_size = 0;
-	pub_to_pem(ca_pub, &ca_pub_bytes, &ca_pub_size);
-	// print_bytes(ca_pub_bytes, ca_pub_size);
-
-	send(newsockfd, ca_pub_bytes, ca_pub_size, 0);
-	// send(newsockfd, sendfirstbuf, ca_pub_size, 0);
-	//接收证书请求的密文
+	puts("发起认证请求");
+	//接收随机字符串
 	char recvbuf[2048];	
-	recv(newsockfd, recvbuf, sizeof(recvbuf), 0);
-	// printf("收到encode_id：%s \n", recvbuf);
-	//使用私钥解密密文得到id
-	char *ca_sk = "ncc.key";
-	char *decode_id;
-	decode_id = my_decrypt(recvbuf, ca_sk);
-	printf("收到id：%s \n", decode_id);
-	//验证ID合法性
+	recv(sockfd, recvbuf, sizeof(recvbuf), 0);
 
-	//if ID合法 => 获取client的pk
-	char recv_client_pub[2048];	
-	recv(newsockfd, recv_client_pub, sizeof(recv_client_pub), 0);		
-	printf("收到client_pub：%s \n", recv_client_pub);
-	//client_pub 写入文件
-	FILE *fp;
-    if((fp=fopen("pubclient.key","w"))==NULL)
-        printf("file cannot open \n");
-	fputs(recv_client_pub, fp);
-	fclose(fp);
-	// //csr 写入文件
-	// FILE *fp;
-    // if((fp=fopen("app.csr","w"))==NULL)
-    //     printf("file cannot open \n");
-	// fputs(recvbuf, fp);
-	// fclose(fp);
-	// //读取app.csr 得到X509_REQ
-	// X509_REQ *req = NULL;
-	// const char *x509ReqFile = "app.csr";
-	// BIO *in;
-	// in = BIO_new_file(x509ReqFile, "r");
-	// req = PEM_read_bio_X509_REQ(in, NULL, NULL, NULL);
-	// BIO_free(in);
+	printf("收到随机字符串：%s \n", recvbuf);
 
-	// uint8_t *req_bytes = NULL;
-	// size_t req_size = 0;
-	// req_to_pem(req, &req_bytes, &req_size);
-	// print_bytes(req_bytes, req_size);
+	//对ID进行加密
+	char *app_key = "app.key";
+	char *encode_str;
+	encode_str = my_sk_encrypt(recvbuf, app_key);
+	//发送encode_str
+	send(sockfd, encode_str, strlen(encode_str), 0);
+	char recv_verrify[2048];	
+	recv(sockfd, recv_verrify, sizeof(recv_verrify), 0);
+	printf("认证结果：%s \n", recv_verrify);
 
-	// X509 *crt = NULL;
-	// int ret = generate_signed_key_pair(ca_key, ca_crt, &req, &crt);
-	// if (!ret) {
-	// 	fprintf(stderr, "Failed to generate key pair!\n");
-	// 	return 1;
-	// }
-	// // /* Convert key and certificate to PEM format. */
-	// uint8_t *crt_bytes = NULL;
-	// size_t crt_size = 0;
-	// crt_to_pem(crt, &crt_bytes, &crt_size);
-	// print_bytes(crt_bytes, crt_size);
-
-	// //发送签名证书
-	// char sendsecondbuf[2048];
-	// strcpy(sendsecondbuf, crt_bytes);
-	// send(newsockfd, sendsecondbuf, strlen(sendsecondbuf), 0);	
-	
-	close(newsockfd);
 	close(sockfd);
-	// puts("注册成功");
 	exit(EXIT_SUCCESS);
-
-
-	// /* Free stuff. */
-	// EVP_PKEY_free(ca_key);
-	// EVP_PKEY_free(key);
-	// X509_free(ca_crt);
-	// X509_free(crt);
-	// free(key_bytes);
-	// free(crt_bytes);
 
 	cleanup_crypto();
 
@@ -226,41 +133,62 @@ void req_to_pem(X509_REQ *req, uint8_t **req_bytes, size_t *req_size)
 	BIO_free_all(bio);
 }
 
-int generate_signed_key_pair(EVP_PKEY *ca_key, X509 *ca_crt, X509_REQ **req, X509 **crt)
+int generate_signed_key_pair(EVP_PKEY **key, X509_REQ **req, X509 **crt)
 {
-	/* Sign with the CA. */
-	*crt = X509_new();
-	if (!*crt) goto err;
+	/* Generate the private key and corresponding CSR. */
+	// X509_REQ *req = NULL;
+	if (!generate_key_csr(key, req)) {
+		fprintf(stderr, "Failed to generate key and/or CSR!\n");
+		return 0;
+	}
 
-	X509_set_version(*crt, 2); /* Set version to X509v3 */
-
-	/* Generate random 20 byte serial. */
-	if (!generate_set_random_serial(*crt)) goto err;
-
-	/* Set issuer to CA's subject. */
-	X509_set_issuer_name(*crt, X509_get_subject_name(ca_crt));
-
-	/* Set validity of certificate to 2 years. */
-	X509_gmtime_adj(X509_get_notBefore(*crt), 0);
-	X509_gmtime_adj(X509_get_notAfter(*crt), (long)2*365*3600);
-
-	/* Get the request's subject and just use it (we don't bother checking it since we generated
-	 * it ourself). Also take the request's public key. */
-	X509_set_subject_name(*crt, X509_REQ_get_subject_name(*req));
-	EVP_PKEY *req_pubkey = X509_REQ_get_pubkey(*req);
-	X509_set_pubkey(*crt, req_pubkey);
-	EVP_PKEY_free(req_pubkey);
-
-	/* Now perform the actual signing with the CA. */
-	if (X509_sign(*crt, ca_key, EVP_sha256()) == 0) goto err;
-
-	X509_REQ_free(*req);
+	// /* Convert req to PEM format. */
+	// // 将private key 和 csr 写入文件
+	// uint8_t *req_bytes = NULL;
+	// size_t req_size = 0;
+	// uint8_t *key_bytes = NULL;
+	// size_t key_size = 0;
+	// req_to_pem(*req, &req_bytes, &req_size);
+	// char *csr_path = "app.csr";
+	// write_bytes(csr_path, req_bytes, req_size);
+	// key_to_pem(*key, &key_bytes, &key_size);
+	// char *key_path = "app.key";
+	// write_bytes(key_path, key_bytes, key_size);
+	
 	return 1;
-err:
-	// EVP_PKEY_free(*key);
-	X509_REQ_free(*req);
-	X509_free(*crt);
-	return 0;
+// 	/* Sign with the CA. */
+// 	*crt = X509_new();
+// 	if (!*crt) goto err;
+
+// 	X509_set_version(*crt, 2); /* Set version to X509v3 */
+
+// 	/* Generate random 20 byte serial. */
+// 	if (!generate_set_random_serial(*crt)) goto err;
+
+// 	/* Set issuer to CA's subject. */
+// 	X509_set_issuer_name(*crt, X509_get_subject_name(ca_crt));
+
+// 	/* Set validity of certificate to 2 years. */
+// 	X509_gmtime_adj(X509_get_notBefore(*crt), 0);
+// 	X509_gmtime_adj(X509_get_notAfter(*crt), (long)2*365*3600);
+
+// 	/* Get the request's subject and just use it (we don't bother checking it since we generated
+// 	 * it ourself). Also take the request's public key. */
+// 	X509_set_subject_name(*crt, X509_REQ_get_subject_name(req));
+// 	EVP_PKEY *req_pubkey = X509_REQ_get_pubkey(req);
+// 	X509_set_pubkey(*crt, req_pubkey);
+// 	EVP_PKEY_free(req_pubkey);
+
+// 	/* Now perform the actual signing with the CA. */
+// 	if (X509_sign(*crt, ca_key, EVP_sha256()) == 0) goto err;
+
+// 	X509_REQ_free(req);
+// 	return 1;
+// err:
+// 	EVP_PKEY_free(*key);
+// 	X509_REQ_free(req);
+// 	X509_free(*crt);
+// 	return 0;
 }
 
 int generate_key_csr(EVP_PKEY **key, X509_REQ **req)
@@ -343,7 +271,7 @@ void pub_to_pem(EVP_PKEY *key, uint8_t **key_bytes, size_t *key_size)
 	BIO_free_all(bio);
 }
 
-int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub)
+int load_client(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pub_path, EVP_PKEY **ca_pub)
 {
 	BIO *bio = NULL;
 	*ca_key = NULL;
@@ -376,7 +304,19 @@ void print_bytes(uint8_t *data, size_t size)
 	}
 }
 
- //加密
+void write_bytes(const char *path, uint8_t *data, size_t size)
+{
+    FILE *fp;
+    if((fp=fopen(path,"a"))==NULL)
+        printf("file cannot open \n");
+    // else
+    //     printf("file opened for writing \n");
+	for (size_t i = 0; i < size; i++) {
+		// printf("%c", data[i]);
+		fputc(data[i],fp); //输入到文件中
+	}
+}
+//加密
  char *my_encrypt(char *str, char *path_key)
  {
      char *p_en = NULL;
@@ -421,8 +361,9 @@ void print_bytes(uint8_t *data, size_t size)
      if(file)     fclose(file);
 
      return p_en;
- } 
-//解密
+ }   
+
+ //解密
  char *my_decrypt(char *str, char *path_key)
  {
      char *p_de = NULL;
@@ -455,7 +396,7 @@ void print_bytes(uint8_t *data, size_t size)
     //5.对内容进行加密
     if(RSA_private_decrypt(256, (unsigned char*)str, (unsigned char*)p_de, p_rsa, RSA_PKCS1_PADDING) < 0)
     {
-        perror("RSA_public_encrypt() error ");
+        perror("RSA_private_decrypt() error ");
         goto End;
     }
 
@@ -466,3 +407,4 @@ void print_bytes(uint8_t *data, size_t size)
 
     return p_de;
 }
+
