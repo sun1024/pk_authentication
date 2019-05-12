@@ -24,7 +24,7 @@
 #define REQ_DN_O "Example Company"
 #define REQ_DN_OU ""
 #define REQ_DN_CN "VNF Application"
-#define PORT 2345
+#define PORT 2346
 #define MAXSIZE 2048
 
 static void cleanup_crypto(void);
@@ -40,6 +40,8 @@ static int load_ca(const char *ca_key_path, EVP_PKEY **ca_key, const char *ca_pu
 static void print_bytes(uint8_t *data, size_t size);
 static char *my_encrypt(char *str,char *path_key);
 static char *my_decrypt(char *str,char *path_key);
+static char *my_sk_encrypt(char *str, char *path_key);
+static char *my_pk_decrypt(char *str, char *path_key);
 
 int main(int argc, char **argv)
 {
@@ -53,16 +55,16 @@ int main(int argc, char **argv)
 	// char *ca_crt_path = argv[2];
 	// char *ca_pub_path = "pubca.key";
 
-	char *ca_key_path = "ncc.key";
-	char *ca_pub_path = "pubncc.key";
-	/* Load CA key and cert. */
-	initialize_crypto();
-	EVP_PKEY *ca_key = NULL;
-	EVP_PKEY *ca_pub = NULL;
-	if (!load_ca(ca_key_path, &ca_key, ca_pub_path, &ca_pub)) {
-		fprintf(stderr, "Failed to load CA certificate and/or key!\n");
-		return 1;
-	}
+	// char *ca_key_path = "ncc.key";
+	// char *ca_pub_path = "pubncc.key";
+	// /* Load CA key and cert. */
+	// initialize_crypto();
+	// EVP_PKEY *ca_key = NULL;
+	// EVP_PKEY *ca_pub = NULL;
+	// if (!load_ca(ca_key_path, &ca_key, ca_pub_path, &ca_pub)) {
+	// 	fprintf(stderr, "Failed to load CA certificate and/or key!\n");
+	// 	return 1;
+	// }
 
 	//socket 过程
 	int sockfd, newsockfd;
@@ -88,7 +90,7 @@ int main(int argc, char **argv)
 	server_addr.sin_port = htons(PORT);
 	//设置ip为本机IP
 	// server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server_addr.sin_addr.s_addr = inet_addr("192.168.242.136");
 	if (bind(sockfd, (struct sockaddr*)(&server_addr), sizeof(struct sockaddr)) < 0)
 	{
 		fprintf(stderr, "bind failed \n");
@@ -112,74 +114,28 @@ int main(int argc, char **argv)
 	//printf("new socket id is %d\n", newsockfd);
 	//printf("Accept clent ip is %s\n", inet_ntoa(client_addr.sin_addr));
 
-	//发送公钥(ca_pub)
-	uint8_t *ca_pub_bytes = NULL;
-	size_t ca_pub_size = 0;
-	pub_to_pem(ca_pub, &ca_pub_bytes, &ca_pub_size);
-	// print_bytes(ca_pub_bytes, ca_pub_size);
-
-	send(newsockfd, ca_pub_bytes, ca_pub_size, 0);
+	//发送随机字符串
+	char *random_str = "a415ab5cc17c8c093c015ccdb7e552aee7911aa4";
+	send(newsockfd, random_str, strlen(random_str), 0);
 	// send(newsockfd, sendfirstbuf, ca_pub_size, 0);
-	//接收证书请求的密文
+	//接收密文
 	char recvbuf[2048];	
 	recv(newsockfd, recvbuf, sizeof(recvbuf), 0);
 	// printf("收到encode_id：%s \n", recvbuf);
-	//使用私钥解密密文得到id
-	char *ca_sk = "ncc.key";
-	char *decode_id;
-	decode_id = my_decrypt(recvbuf, ca_sk);
-	printf("收到id：%s \n", decode_id);
-	//验证ID合法性
+	//解密密文并验证random_str
+	char *app_pk = "pubapp.key";
+	char *decode_str;
+	decode_id = my_pk_decrypt(recvbuf, app_pk);
+	printf("收到字符串：%s \n", decode_str);
+	//验证random_str
 
-	//if ID合法 => 获取client的pk
-	char recv_client_pub[2048];	
-	recv(newsockfd, recv_client_pub, sizeof(recv_client_pub), 0);		
-	printf("收到client_pub：%s \n", recv_client_pub);
-	//client_pub 写入文件
-	FILE *fp;
-    if((fp=fopen("pubclient.key","w"))==NULL)
-        printf("file cannot open \n");
-	fputs(recv_client_pub, fp);
-	fclose(fp);
-	// //csr 写入文件
-	// FILE *fp;
-    // if((fp=fopen("app.csr","w"))==NULL)
-    //     printf("file cannot open \n");
-	// fputs(recvbuf, fp);
-	// fclose(fp);
-	// //读取app.csr 得到X509_REQ
-	// X509_REQ *req = NULL;
-	// const char *x509ReqFile = "app.csr";
-	// BIO *in;
-	// in = BIO_new_file(x509ReqFile, "r");
-	// req = PEM_read_bio_X509_REQ(in, NULL, NULL, NULL);
-	// BIO_free(in);
-
-	// uint8_t *req_bytes = NULL;
-	// size_t req_size = 0;
-	// req_to_pem(req, &req_bytes, &req_size);
-	// print_bytes(req_bytes, req_size);
-
-	// X509 *crt = NULL;
-	// int ret = generate_signed_key_pair(ca_key, ca_crt, &req, &crt);
-	// if (!ret) {
-	// 	fprintf(stderr, "Failed to generate key pair!\n");
-	// 	return 1;
-	// }
-	// // /* Convert key and certificate to PEM format. */
-	// uint8_t *crt_bytes = NULL;
-	// size_t crt_size = 0;
-	// crt_to_pem(crt, &crt_bytes, &crt_size);
-	// print_bytes(crt_bytes, crt_size);
-
-	// //发送签名证书
-	// char sendsecondbuf[2048];
-	// strcpy(sendsecondbuf, crt_bytes);
-	// send(newsockfd, sendsecondbuf, strlen(sendsecondbuf), 0);	
+	//if ID合法 => 认证成功
+	char *verify = "success";
+	send(newsockfd, verify, strlen(verify), 0);	
 	
 	close(newsockfd);
 	close(sockfd);
-	// puts("注册成功");
+
 	exit(EXIT_SUCCESS);
 
 
@@ -454,6 +410,97 @@ void print_bytes(uint8_t *data, size_t size)
 
     //5.对内容进行加密
     if(RSA_private_decrypt(256, (unsigned char*)str, (unsigned char*)p_de, p_rsa, RSA_PKCS1_PADDING) < 0)
+    {
+        perror("RSA_public_encrypt() error ");
+        goto End;
+    }
+
+    End:
+    //6.释放秘钥空间， 关闭文件
+     if(p_rsa)    RSA_free(p_rsa);
+    if(file)     fclose(file);
+
+    return p_de;
+}
+
+ //私钥加密
+ char *my_sk_encrypt(char *str, char *path_key)
+ {
+     char *p_en = NULL;
+     RSA  *p_rsa = NULL;
+     FILE *file = NULL;
+
+     int  lenth = 0;    //flen为源文件长度， rsa_len为秘钥长度
+
+     //1.打开秘钥文件
+     if((file = fopen(path_key, "rb")) == NULL)
+     {
+        perror("fopen() error 111111111 ");
+         goto End;
+     }        
+
+     //2.从私钥中获取 加密的秘钥
+     if((p_rsa = PEM_read_RSAPrivateKey(file, NULL,NULL,NULL )) == NULL)
+     {
+         ERR_print_errors_fp(stdout);
+         goto End;
+     }
+     lenth = strlen(str);
+
+     p_en = (char *)malloc(256);
+     if(!p_en)
+     {
+         perror("malloc() error 2222222222");
+         goto End;
+     }    
+     memset(p_en, 0, 256);
+
+     //5.对内容进行加密
+     if(RSA_private_encrypt(lenth, (unsigned char*)str, (unsigned char*)p_en, p_rsa, RSA_PKCS1_PADDING) < 0)
+     {
+     perror("RSA_private_encrypt() error 2222222222");
+     goto End;
+     }
+ End:
+
+     //6.释放秘钥空间， 关闭文件
+     if(p_rsa)    RSA_free(p_rsa);
+     if(file)     fclose(file);
+
+     return p_en;
+ } 
+//公钥解密
+ char *my_pk_decrypt(char *str, char *path_key)
+ {
+     char *p_de = NULL;
+     RSA  *p_rsa = NULL;
+     FILE *file = NULL;
+
+    //1.打开秘钥文件
+    file = fopen(path_key, "rb");
+    if(!file)
+    {
+        perror("fopen() error 22222222222");
+        goto End;
+    }        
+
+    //2.从公钥中获取 解密的秘钥
+    if((p_rsa = PEM_read_RSA_PUBKEY(file, NULL,NULL,NULL )) == NULL)
+    {
+        ERR_print_errors_fp(stdout);
+        goto End;
+    }
+
+    p_de = (char *)malloc(245);
+    if(!p_de)
+    {
+        perror("malloc() error ");
+        goto End;
+    }    
+    memset(p_de, 0, 245);
+
+    //5.对内容进行加密
+    if(RSA_public_decrypt(256, (unsigned char*)str, (unsigned char*)p_de, p_rsa, RSA_PKCS1_PADDING) < 0)
     {
         perror("RSA_public_encrypt() error ");
         goto End;

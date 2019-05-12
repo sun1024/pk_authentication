@@ -9,5 +9,3 @@ ncc: main.o
 
 %.o: %.c
 		$(CC) -c -o $@ $(CFLAGS) $<
-
-		openssl genrsa -out ncc.key 2048 && openssl rsa -in ncc.key -pubout -out pubncc.key
