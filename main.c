@@ -115,18 +115,32 @@ int main(int argc, char **argv)
 	//printf("Accept clent ip is %s\n", inet_ntoa(client_addr.sin_addr));
 
 	//发送随机字符串
-	char *random_str = "a415ab5cc17c8c093c015ccdb7e552aee7911aa4";
+	unsigned char *random_str = "a415ab5cc17c8c093c015ccdb7e552aee7911aa4";
 	send(newsockfd, random_str, strlen(random_str), 0);
 	// send(newsockfd, sendfirstbuf, ca_pub_size, 0);
 	//接收密文
-	char recvbuf[2048];	
+	unsigned char recvbuf[2048];	
 	recv(newsockfd, recvbuf, sizeof(recvbuf), 0);
-	// printf("收到encode_id：%s \n", recvbuf);
+	printf("收到encode_str：\n%s\n", recvbuf);
 	//解密密文并验证random_str
 	char *app_pk = "pubapp.key";
-	char *decode_str;
+	unsigned char *decode_str;
 	decode_str = my_pk_decrypt(recvbuf, app_pk);
-	printf("收到字符串：%s \n", decode_str);
+	printf("收到字符串：%s\n", decode_str);
+
+	//对ID进行加密
+	char *app_key = "app.key";
+	char *encode_str;
+	encode_str = my_sk_encrypt(random_str, app_key);
+	printf("str：\n%s\n", encode_str);
+	//解密
+	char *decode_str1;
+	decode_str1 = my_pk_decrypt(encode_str, app_pk);
+	printf("decode_str：\n%s\n", decode_str1);
+
+	int cmp;
+	cmp = strcmp(decode_str1, decode_str);
+	printf("cmp: %d\n", cmp);
 	//验证random_str
 
 	//if ID合法 => 认证成功
