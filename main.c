@@ -82,20 +82,26 @@ int main(int argc, char **argv)
 	}
 	puts("发起认证请求");
 	//接收随机字符串
-	char recvbuf[2048];	
+	unsigned char recvbuf[2048];	
 	recv(sockfd, recvbuf, sizeof(recvbuf), 0);
 
-	printf("收到随机字符串：%s \n", recvbuf);
+	printf("收到随机字符串：%s\n", recvbuf);
 
 	//对ID进行加密
 	char *app_key = "app.key";
-	char *encode_str;
+	unsigned char *encode_str;
 	encode_str = my_sk_encrypt(recvbuf, app_key);
+	printf("str：\n%s\n", encode_str);
+	//解密
+	char *app_pk_key = "pubapp.key";
+	unsigned char *decode_str;
+	decode_str = my_pk_decrypt(encode_str, app_pk_key);
+	printf("decode_str：\n%s\n", decode_str);
 	//发送encode_str
 	send(sockfd, encode_str, strlen(encode_str), 0);
 	char recv_verrify[2048];	
 	recv(sockfd, recv_verrify, sizeof(recv_verrify), 0);
-	printf("认证结果：%s \n", recv_verrify);
+	printf("认证结果：%s\n", recv_verrify);
 
 	close(sockfd);
 	exit(EXIT_SUCCESS);
@@ -488,7 +494,7 @@ void write_bytes(const char *path, uint8_t *data, size_t size)
     //5.对内容进行加密
     if(RSA_public_decrypt(256, (unsigned char*)str, (unsigned char*)p_de, p_rsa, RSA_PKCS1_PADDING) < 0)
     {
-        perror("RSA_public_encrypt() error ");
+        perror("RSA_public_decrypt() error ");
         goto End;
     }
 
