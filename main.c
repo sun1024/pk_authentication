@@ -125,7 +125,7 @@ int main(int argc, char **argv)
 	//解密密文并验证random_str
 	char *app_pk = "pubapp.key";
 	char *decode_str;
-	decode_id = my_pk_decrypt(recvbuf, app_pk);
+	decode_str = my_pk_decrypt(recvbuf, app_pk);
 	printf("收到字符串：%s \n", decode_str);
 	//验证random_str
 
