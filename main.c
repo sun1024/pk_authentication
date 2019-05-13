@@ -25,6 +25,7 @@
 #define REQ_DN_OU ""
 #define REQ_DN_CN "VNF Application"
 #define PORT 2345
+#define STAR_PORT 2346
 #define MAXSIZE 2048
 
 static void cleanup_crypto(void);
@@ -88,7 +89,7 @@ int main(int argc, char **argv)
 	server_addr.sin_port = htons(PORT);
 	//设置ip为本机IP
 	// server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server_addr.sin_addr.s_addr = inet_addr("192.168.242.135");
 	if (bind(sockfd, (struct sockaddr*)(&server_addr), sizeof(struct sockaddr)) < 0)
 	{
 		fprintf(stderr, "bind failed \n");
@@ -131,6 +132,10 @@ int main(int argc, char **argv)
 	printf("收到id：%s \n", decode_id);
 	//验证ID合法性
 
+	//ID合法
+	char *verify = "success";
+	send(newsockfd, verify, strlen(verify), 0);
+
 	//if ID合法 => 获取client的pk
 	char recv_client_pub[2048];	
 	recv(newsockfd, recv_client_pub, sizeof(recv_client_pub), 0);		
@@ -141,45 +146,35 @@ int main(int argc, char **argv)
         printf("file cannot open \n");
 	fputs(recv_client_pub, fp);
 	fclose(fp);
-	// //csr 写入文件
-	// FILE *fp;
-    // if((fp=fopen("app.csr","w"))==NULL)
-    //     printf("file cannot open \n");
-	// fputs(recvbuf, fp);
-	// fclose(fp);
-	// //读取app.csr 得到X509_REQ
-	// X509_REQ *req = NULL;
-	// const char *x509ReqFile = "app.csr";
-	// BIO *in;
-	// in = BIO_new_file(x509ReqFile, "r");
-	// req = PEM_read_bio_X509_REQ(in, NULL, NULL, NULL);
-	// BIO_free(in);
-
-	// uint8_t *req_bytes = NULL;
-	// size_t req_size = 0;
-	// req_to_pem(req, &req_bytes, &req_size);
-	// print_bytes(req_bytes, req_size);
-
-	// X509 *crt = NULL;
-	// int ret = generate_signed_key_pair(ca_key, ca_crt, &req, &crt);
-	// if (!ret) {
-	// 	fprintf(stderr, "Failed to generate key pair!\n");
-	// 	return 1;
-	// }
-	// // /* Convert key and certificate to PEM format. */
-	// uint8_t *crt_bytes = NULL;
-	// size_t crt_size = 0;
-	// crt_to_pem(crt, &crt_bytes, &crt_size);
-	// print_bytes(crt_bytes, crt_size);
-
-	// //发送签名证书
-	// char sendsecondbuf[2048];
-	// strcpy(sendsecondbuf, crt_bytes);
-	// send(newsockfd, sendsecondbuf, strlen(sendsecondbuf), 0);	
+	//将client_pub 发给卫星
+	//socket 过程
+	int star_sockfd;	
+	char buffer[2014];
+	struct sockaddr_in star_addr;
+	struct hostent *host;
+	int nbytes;
+	if ((star_sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	{
+		fprintf(stderr, "Socket Error is %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	bzero(&star_addr, sizeof(star_addr));
+	star_addr.sin_family = AF_INET;
+	star_addr.sin_port = htons(STAR_PORT);
+	// server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	star_addr.sin_addr.s_addr = inet_addr("192.168.242.136");
+	//客户端发出请求
+	if (connect(star_sockfd, (struct sockaddr *)(&star_addr), sizeof(struct sockaddr)) == -1)
+	{
+		fprintf(stderr, "Connect failed\n");
+		exit(EXIT_FAILURE);
+	}
+	send(star_sockfd, recv_client_pub, strlen(recv_client_pub), 0);
+	close(star_sockfd);
 	
 	close(newsockfd);
 	close(sockfd);
-	// puts("注册成功");
+	
 	exit(EXIT_SUCCESS);
 
 
@@ -455,7 +450,7 @@ void print_bytes(uint8_t *data, size_t size)
     //5.对内容进行加密
     if(RSA_private_decrypt(256, (unsigned char*)str, (unsigned char*)p_de, p_rsa, RSA_PKCS1_PADDING) < 0)
     {
-        perror("RSA_public_encrypt() error ");
+        perror("RSA_private_decrypt() error ");
         goto End;
     }
 
