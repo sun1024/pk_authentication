@@ -67,7 +67,7 @@ int main(int argc, char **argv)
 	// }
 
 	//socket 过程
-	int sockfd, newsockfd;
+	int sockfd, newsockfd, ncc_sockfd;
 	//定义服务端套接口数据结构
 	struct sockaddr_in server_addr;
 	struct sockaddr_in client_addr;
@@ -105,12 +105,29 @@ int main(int argc, char **argv)
 	//puts("listen success\n");
 	int sin_size = sizeof(struct sockaddr_in);
 	//printf("sin_size is %d\n", sin_size);
+	if ((ncc_sockfd = accept(sockfd, (struct sockaddr *)(&client_addr), &sin_size)) < 0)
+	{
+		perror("accept error");
+		exit(EXIT_FAILURE);
+	}
+	//接收client_pk
+	char recv_client_pk[2048];	
+	recv(ncc_sockfd, recv_client_pk, sizeof(recv_client_pk), 0);
+	printf("收到client_pk：\n%s\n", recv_client_pk);
+	//client_pk写入文件
+	FILE *fp;
+    if((fp=fopen("pubapp.key","w"))==NULL)
+        printf("file cannot open \n");
+	fputs(recv_client_pk, fp);
+	fclose(fp);
+
+	close(ncc_sockfd);
+	
 	if ((newsockfd = accept(sockfd, (struct sockaddr *)(&client_addr), &sin_size)) < 0)
 	{
 		perror("accept error");
 		exit(EXIT_FAILURE);
 	}
-	
 	//printf("new socket id is %d\n", newsockfd);
 	//printf("Accept clent ip is %s\n", inet_ntoa(client_addr.sin_addr));
 
