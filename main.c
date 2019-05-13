@@ -149,15 +149,15 @@ int main(int argc, char **argv)
 	char *app_key = "app.key";
 	char *encode_str;
 	encode_str = my_sk_encrypt(random_str, app_key);
-	printf("str：\n%s\n", encode_str);
-	//解密
-	char *decode_str1;
-	decode_str1 = my_pk_decrypt(encode_str, app_pk);
-	printf("decode_str：\n%s\n", decode_str1);
+	// printf("str：\n%s\n", encode_str);
+	// //解密
+	// char *decode_str1;
+	// decode_str1 = my_pk_decrypt(encode_str, app_pk);
+	// printf("decode_str：\n%s\n", decode_str1);
 
-	int cmp;
-	cmp = strcmp(decode_str1, decode_str);
-	printf("cmp: %d\n", cmp);
+	// int cmp;
+	// cmp = strcmp(decode_str1, decode_str);
+	// printf("cmp: %d\n", cmp);
 	//验证random_str
 
 	//if ID合法 => 认证成功
