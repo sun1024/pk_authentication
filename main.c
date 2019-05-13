@@ -71,7 +71,7 @@ int main(int argc, char **argv)
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(PORT);
 	// server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server_addr.sin_addr.s_addr = inet_addr("192.168.242.135");
 	//客户端发出请求
 	if (connect(sockfd, (struct sockaddr *)(&server_addr), sizeof(struct sockaddr)) == -1)
 	{
@@ -102,6 +102,9 @@ int main(int argc, char **argv)
 	// printf("id：%s \n", decode_id);
 	//发送encode_id
 	send(sockfd, encode_id, strlen(encode_id), 0);
+	char recv_verrify[2048];
+	recv(sockfd, recv_verrify, sizeof(recv_verrify), 0);
+	printf("verify：%s \n", recv_verrify);
 
 	//发送client_pub
 	uint8_t *client_pub_bytes = NULL;
@@ -432,7 +435,7 @@ void write_bytes(const char *path, uint8_t *data, size_t size)
     //5.对内容进行加密
     if(RSA_private_decrypt(256, (unsigned char*)str, (unsigned char*)p_de, p_rsa, RSA_PKCS1_PADDING) < 0)
     {
-        perror("RSA_public_encrypt() error ");
+        perror("RSA_private_decrypt() error ");
         goto End;
     }
 
